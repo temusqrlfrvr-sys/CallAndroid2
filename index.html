@@ -117,11 +117,9 @@
             <h2>My Contacts</h2>
             <div style="background: rgba(0,0,0,0.05); padding: 15px; border-radius: 12px; margin-bottom: 20px; border: 1px solid var(--border-color);">
                 <h4 id="contact-form-title">Add New Contact</h4>
-                <input type="hidden" id="edit-index">
                 <input type="text" id="contact-name" placeholder="Contact Name">
                 <input type="text" id="contact-id" placeholder="4-Digit Network ID" inputmode="numeric" maxlength="4">
-                <button class="btn-standard" id="btn-save-contact" onclick="saveContact()">Add Contact</button>
-                <button class="btn-standard" id="btn-cancel-edit" style="background:var(--text-muted); display:none; margin-top:4px;" onclick="resetContactForm()">Cancel Edit</button>
+                <button class="btn-standard" onclick="saveContact()">Add Contact</button>
             </div>
             <div id="contacts-list-container"></div>
         </div>
@@ -179,7 +177,7 @@
             <p style="text-transform: uppercase; font-size:0.8rem; font-weight:bold; color:var(--text-muted)">Connected Call</p>
             <h3 id="active-call-party">ID: 0000</h3>
             <p style="margin: 15px 0; font-size: 1.8rem; font-weight: bold; color: var(--success-color);" id="call-duration-clock">00:00</p>
-            <button class="btn-standard style-danger" style="background:var(--danger-color); border-radius:30px;" onclick="hangUpCurrentCall()">Hang Up</button>
+            <button class="btn-standard" style="background:var(--danger-color); border-radius:30px;" onclick="hangUpCurrentCall()">Hang Up</button>
         </div>
     </div>
 
@@ -222,7 +220,6 @@
             localStorage.setItem('ca_theme', appState.theme);
         }
 
-        // Keyboard inputs
         window.addEventListener('keydown', (e) => {
             if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'SELECT') return;
             if (['0','1','2','3','4','5','6','7','8','9','*','#'].includes(e.key)) pressKey(e.key);
@@ -230,7 +227,6 @@
             else if (e.key === 'Enter') makeCallFromDialer();
         });
 
-        // Web Audio Custom Synthesizer
         function playChimeTone(frequencies, duration, type="sine") {
             try {
                 if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -269,39 +265,35 @@
         function stopRingtonePlayback() { if (ringtoneInterval) { clearInterval(ringtoneInterval); ringtoneInterval = null; } }
         function previewRingtone() { appState.ringtone = document.getElementById('setting-ringtone').value; saveStateToDisk(); startRingtonePlayback(); setTimeout(stopRingtonePlayback, 1600); }
 
-        // Core Signaling Connection Handlers
         function initRealTelephonyNetwork() {
             document.getElementById('my-id-display').innerText = appState.myPermanentId;
             peer = new Peer('ca-' + appState.myPermanentId, {
-                config: { 'iceServers': [{ 'urls': 'stun:stun.l.google.com:19302' }, { 'urls': 'stun:stun1.l.google.com:19302' }] },
+                config: { 'iceServers': [{ 'urls': 'stun:stun.l.google.com:19302' }, { 'urls': 'stun:stun1.l.google.com:19302' }, { 'urls': 'stun:stun2.l.google.com:19302' }] },
                 debug: 1
             });
 
-            // CRITICAL SAFARI FIX: Open explicit data socket lines first before initializing media handlers
+            // 1. Listen for the lightweight textual handshake line
             peer.on('connection', (conn) => {
                 activeDataConnection = conn;
                 setupDataPacketListeners(conn);
             });
 
+            // 2. Pure media pipeline interception
             peer.on('call', (incomingCall) => {
                 activeMediaCall = incomingCall;
-                targetCallEntityId = incomingCall.peer.replace('ca-', '');
-                
-                // CRITICAL SAFARI FIX: Render UI immediately before handling media streams to guarantee visibility
-                let targetTone = (incomingCall.options && incomingCall.options.metadata && incomingCall.options.metadata.ringtone) ? incomingCall.options.metadata.ringtone : appState.ringtone;
-                renderIncomingCallUI(targetCallEntityId, targetTone);
             });
         }
 
         function setupDataPacketListeners(conn) {
             conn.on('data', (data) => {
+                // Safeguard stage: Safely show UI modal before WebRTC components initialize
                 if (data.type === 'INBOUND_ALERT') {
                     targetCallEntityId = conn.peer.replace('ca-', '');
                     renderIncomingCallUI(targetCallEntityId, data.ringtone);
                 }
                 if (data.type === 'ACCEPT_SIGNAL') {
                     document.getElementById('outgoing-call-modal').style.display = 'none';
-                    beginSynchronizedTimer(targetCallEntityId);
+                    executeMediaHandshakeRoute(targetCallEntityId);
                 }
                 if (data.type === 'HANGUP_SIGNAL') teardownCallUI();
             });
@@ -346,25 +338,46 @@
             document.getElementById('outgoing-call-party').innerText = `ID: ${targetId}`;
             document.getElementById('outgoing-call-modal').style.display = 'flex';
 
-            // Connect Data Line First to alert target browser context safely
+            // Connect signaling data line first to safely unlock remote phone's UI
             activeDataConnection = peer.connect('ca-' + targetId);
             activeDataConnection.on('open', () => {
                 activeDataConnection.send({ type: 'INBOUND_ALERT', ringtone: appState.ringtone });
             });
             setupDataPacketListeners(activeDataConnection);
+        }
 
-            activeMediaCall = peer.call('ca-' + targetId, myStream, { metadata: { ringtone: appState.ringtone } });
-            activeMediaCall.on('close', () => { teardownCallUI(); });
+        // Triggered on Caller side when target phone clicks accept
+        function executeMediaHandshakeRoute(targetId) {
+            activeMediaCall = peer.call('ca-' + targetId, myStream);
+            beginSynchronizedTimer(targetId);
         }
 
         function actionAcceptCall() {
-            clearInterval(incomingTimeoutTracker); stopRingtonePlayback();
+            clearInterval(incomingTimeoutTracker); 
+            stopRingtonePlayback();
             document.getElementById('incoming-call-modal').style.display = 'none';
+            
+            // Re-trigger AudioContext to legally unlock hardware access via gesture tap
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+
+            if (activeDataConnection && activeDataConnection.open) {
+                activeDataConnection.send({ type: 'ACCEPT_SIGNAL' });
+            }
+            
+            addCallToLog(targetCallEntityId, 'Inbound', 'Answered');
+
+            // Wait for incoming stream processing line
             if (activeMediaCall) {
                 activeMediaCall.answer(myStream);
-                if (activeDataConnection && activeDataConnection.open) activeDataConnection.send({ type: 'ACCEPT_SIGNAL' });
-                addCallToLog(targetCallEntityId, 'Inbound', 'Answered');
                 beginSynchronizedTimer(targetCallEntityId);
+            } else {
+                // Fallback catch if the media connection is lagging behind the text socket
+                peer.on('call', (incomingCall) => {
+                    activeMediaCall = incomingCall;
+                    activeMediaCall.answer(myStream);
+                    beginSynchronizedTimer(targetCallEntityId);
+                });
             }
         }
 
@@ -378,9 +391,7 @@
                 let existing = document.getElementById('remote-audio-sink'); if (existing) existing.remove();
                 const audio = document.createElement('audio');
                 audio.id = 'remote-audio-sink'; audio.srcObject = remoteStream; audio.autoplay = true;
-                // CRITICAL SAFARI FIX: Mobile browsers require these flags to handle live peer streams inline
                 audio.setAttribute('playsinline', 'true');
-                audio.setAttribute('controls', 'false');
                 document.body.appendChild(audio);
             });
 
@@ -407,7 +418,6 @@
             document.getElementById('active-call-modal').style.display = 'none';
         }
 
-        // Tab and Control management
         function switchTab(tabName) {
             document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
             document.querySelectorAll('nav button').forEach(el => el.classList.remove('active'));
