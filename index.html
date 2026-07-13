@@ -143,17 +143,15 @@
         .item-actions button { background: none; border: none; margin-left: 14px; cursor: pointer; font-size: 1.1rem; }
 
         .badge { padding: 4px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: bold; color: white; text-transform: uppercase; }
-        .badge.missed { background: var(--danger-color); }
-        .badge.outgoing { background: var(--primary-color); }
         .badge.answered { background: var(--success-color); }
-        .badge.declined { background: #7c3aed; }
 
         .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); align-items: center; justify-content: center; z-index: 1000; padding: 20px; }
         .modal { background: var(--panel-bg); color: var(--text-main); padding: 30px; border-radius: 16px; width: 100%; max-width: 360px; text-align: center; }
         .modal h3 { margin-bottom: 10px; font-size: 1.6rem; }
         .modal .timer { font-size: 1.2rem; color: var(--danger-color); margin: 15px 0; font-weight: bold; }
+        .modal-status { margin: 10px 0; font-size: 1.1rem; color: var(--text-muted); font-weight: 500; }
         .modal-buttons { display: flex; gap: 15px; margin-top: 25px; }
-        .modal-buttons button { flex: 1; padding: 14px; border: none; border-radius: 30px; font-weight: bold; font-size: 1rem; color: white; }
+        .modal-buttons button { flex: 1; padding: 14px; border: none; border-radius: 30px; font-weight: bold; font-size: 1rem; color: white; cursor: pointer; }
 
         @media (max-width: 768px) {
             body {
@@ -249,7 +247,7 @@
                 <button class="btn-action btn-call" onclick="makeCallFromDialer()">Call</button>
             </div>
             <div style="margin-top:20px; text-align:center;">
-                <button class="btn-standard" style="background:transparent; border:1px solid var(--border-color); font-size:0.9rem;" onclick="requestNotificationPermission()">🔔 Enable System Notifications</button>
+                <button id="btn-notifications-trigger" class="btn-standard" style="background:transparent; border:1px solid var(--border-color); font-size:0.9rem;" onclick="requestNotificationPermission()">🔔 Grant System Notifications</button>
             </div>
         </div>
 
@@ -285,12 +283,10 @@
             <div style="margin-bottom: 25px;">
                 <label style="font-weight: bold; display: block; margin-bottom: 5px;">Ringtone Selection:</label>
                 <select id="setting-ringtone" onchange="previewRingtone()">
-                    <option value="classic">Classic Electronic Bell</option>
-                    <option value="digital">Digital Retro Melody</option>
-                    <option value="marimba">Modern Soft Marimba Chime</option>
-                    <option value="chirp">High-Pitch Robotic Chirp</option>
-                    <option value="siren">Oscillating Siren Sweep</option>
-                    <option value="cyber">Cyber Peak Arpeggio</option>
+                    <option value="classic">Classic Polyphonic Bell</option>
+                    <option value="digital">Digital Synth Melody</option>
+                    <option value="marimba">Modern Warm Marimba</option>
+                    <option value="chirp">Acoustic Electronic Chirp</option>
                     <option value="ambient">Ambient Echo Chime</option>
                 </select>
             </div>
@@ -300,11 +296,22 @@
         </div>
     </main>
 
+    <div id="outgoing-call-modal" class="modal-overlay">
+        <div class="modal" style="border-top: 8px solid var(--primary-color);">
+            <p style="text-transform: uppercase; font-size:0.8rem; font-weight:bold; color:var(--text-muted); letter-spacing:1px;">Placing Connection</p>
+            <h3 id="outgoing-call-party">ID: 0000</h3>
+            <div class="modal-status" id="outgoing-status-text">Calling...</div>
+            <div style="margin-top: 20px;">
+                <button class="btn-standard btn-danger" style="border-radius:30px; width: 60%;" onclick="hangUpCurrentCall()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <div id="incoming-call-modal" class="modal-overlay">
         <div class="modal" style="border-top: 8px solid var(--primary-color);">
             <p style="text-transform: uppercase; font-size:0.8rem; font-weight:bold; color:var(--text-muted); letter-spacing:1px;">Incoming Connection</p>
             <h3 id="incoming-caller-id">ID: 0000</h3>
-            <div class="timer">Disconnecting in: <span id="disconnect-timer-countdown">10</span>s</div>
+            <div class="timer">Disconnecting in: <span id="disconnect-timer-countdown">15</span>s</div>
             <div class="modal-buttons">
                 <button style="background: var(--danger-color); border-radius:30px;" onclick="actionDeclineCall()">Decline</button>
                 <button id="btn-accept-call" style="background: var(--success-color); border-radius:30px;" onclick="actionAcceptCall()">Accept</button>
@@ -316,8 +323,8 @@
         <div class="modal" style="border-top: 8px solid var(--success-color);">
             <p style="text-transform: uppercase; font-size:0.8rem; font-weight:bold; color:var(--text-muted)">Connected Call</p>
             <h3 id="active-call-party">ID: 0000</h3>
-            <p style="margin: 15px 0; font-size: 1.5rem; font-weight: bold; color: var(--success-color);" id="call-duration-clock">00:00</p>
-            <button class="btn-standard btn-danger" style="width:auto; padding: 12px 40px; border-radius:30px;" onclick="endActiveCall()">Hang Up</button>
+            <p style="margin: 15px 0; font-size: 1.8rem; font-weight: bold; color: var(--success-color);" id="call-duration-clock">00:00</p>
+            <button class="btn-standard btn-danger" style="width:auto; padding: 12px 40px; border-radius:30px;" onclick="hangUpCurrentCall()">Hang Up</button>
         </div>
     </div>
 
@@ -327,18 +334,48 @@
         let ringtoneInterval = null;
         let myStream = null;
         let peer = null;
-        let currentCall = null;
+        
+        let activeMediaCall = null;
+        let activeDataConnection = null;
+
+        let callDurationInterval = null;
+        let activeCallStartTime = null;
+        let incomingTimeoutTracker = null;
+        let targetCallEntityId = "";
+
+        // Unchangeable static hardware fingerprint generation
+        function generateHardwareFingerprintID() {
+            let savedId = localStorage.getItem('ca_my_id');
+            if (savedId && savedId.length === 4) return savedId;
+            
+            let fingerprintSrc = navigator.userAgent + navigator.language + screen.width + screen.height;
+            try {
+                let canvas = document.createElement('canvas');
+                let ctx = canvas.getContext('2d');
+                ctx.textBaseline = "top";
+                ctx.font = "14px 'Arial'";
+                ctx.fillText("CallAndroidIdFingerprint", 2, 2);
+                fingerprintSrc += canvas.toDataURL();
+            } catch(e) {}
+            
+            let hash = 0;
+            for (let i = 0; i < fingerprintSrc.length; i++) {
+                hash = (hash << 5) - hash + fingerprintSrc.charCodeAt(i);
+                hash |= 0;
+            }
+            let solidId = String(Math.abs(hash) % 9000 + 1000);
+            localStorage.setItem('ca_my_id', solidId);
+            return solidId;
+        }
 
         let appState = {
-            myPermanentId: localStorage.getItem('ca_my_id') || String(Math.floor(1000 + Math.random() * 9000)),
+            myPermanentId: generateHardwareFingerprintID(),
             contacts: JSON.parse(localStorage.getItem('ca_contacts')) || [],
             history: JSON.parse(localStorage.getItem('ca_history')) || [],
             ringtone: localStorage.getItem('ca_ringtone') || 'classic',
             theme: localStorage.getItem('ca_theme') || 'dark'
         };
 
-        localStorage.setItem('ca_my_id', appState.myPermanentId);
-        
         function saveStateToDisk() {
             localStorage.setItem('ca_contacts', JSON.stringify(appState.contacts));
             localStorage.setItem('ca_history', JSON.stringify(appState.history));
@@ -346,97 +383,68 @@
             localStorage.setItem('ca_theme', appState.theme);
         }
 
-        // --- REAL NETWORKING WITH PEERJS ---
-        function initRealTelephonyNetwork() {
-            // Setup this instance as a unique global node identifier
-            peer = new Peer('ca-' + appState.myPermanentId);
+        // --- PHYSICAL KEYBOARD TRACKER MODULE ---
+        window.addEventListener('keydown', (e) => {
+            if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'SELECT') {
+                return;
+            }
+            const allowedKeys = ['0','1','2','3','4','5','6','7','8','9','*','#'];
+            if (allowedKeys.includes(e.key)) {
+                pressKey(e.key);
+            } else if (e.key === 'Backspace') {
+                const curText = dialScreen.innerText;
+                dialScreen.innerText = curText.substring(0, curText.length - 1);
+            } else if (e.key === 'Enter') {
+                makeCallFromDialer();
+            }
+        });
 
-            peer.on('open', (id) => {
-                document.getElementById('my-id-display').innerText = appState.myPermanentId;
-            });
-
-            peer.on('error', (err) => {
-                console.error("Network Error: ", err.type);
-                if(err.type === 'unavailable-id') {
-                    // If ID is taken on the system, generate a clean one
-                    appState.myPermanentId = String(Math.floor(1000 + Math.random() * 9000));
-                    localStorage.setItem('ca_my_id', appState.myPermanentId);
-                    window.location.reload();
-                }
-            });
-
-            // Handlers for catching incoming calls over the internet
-            peer.on('call', (incomingCall) => {
-                currentCall = incomingCall;
-                let remoteId = incomingCall.peer.replace('ca-', '');
-                triggerInboundCallSimulation(remoteId);
-            });
-        }
-
-        function requestHardwarePermissions() {
-            navigator.mediaDevices.getUserMedia({ audio: true })
-                .then(stream => {
-                    hasMicAccess = true;
-                    myStream = stream;
-                    document.getElementById('permission-warning').style.display = 'none';
-                    document.getElementById('btn-accept-call').disabled = false;
-                    initRealTelephonyNetwork();
-                })
-                .catch(err => {
-                    hasMicAccess = false;
-                    document.getElementById('permission-warning').style.display = 'block';
-                    document.getElementById('btn-accept-call').disabled = true;
-                    initRealTelephonyNetwork(); // Start network anyway to view logs
-                });
-        }
-
-        // --- RINGTONES ---
-        function startRingtonePlayback() {
+        // --- POLYPHONIC AUDIO ENGINE ---
+        function playChimeTone(frequencies, duration, type="sine") {
             if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            const toneType = appState.ringtone;
+            let now = audioCtx.currentTime;
             
-            function beep(freq, duration, type="sine") {
-                if(!audioCtx) return;
+            frequencies.forEach(freq => {
                 let osc = audioCtx.createOscillator();
                 let gainNode = audioCtx.createGain();
+                
                 osc.type = type;
-                osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-                gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
-                gainNode.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+                osc.frequency.setValueAtTime(freq, now);
+                gainNode.gain.setValueAtTime(0.15, now);
+                gainNode.gain.exponentialRampToValueAtTime(0.001, now + duration);
+                
                 osc.connect(gainNode);
                 gainNode.connect(audioCtx.destination);
-                osc.start();
-                osc.stop(audioCtx.currentTime + duration);
-            }
+                osc.start(now);
+                osc.stop(now + duration);
+            });
+        }
 
-            if (toneType === 'classic') {
+        function startRingtonePlayback(selectedTone = appState.ringtone) {
+            stopRingtonePlayback();
+            if (selectedTone === 'classic') {
                 ringtoneInterval = setInterval(() => {
-                    beep(880, 0.1, "sawtooth"); setTimeout(() => beep(880, 0.1, "sawtooth"), 150);
+                    playChimeTone([587.33, 880], 0.15, "triangle");
+                    setTimeout(() => playChimeTone([587.33, 880], 0.15, "triangle"), 180);
                 }, 1000);
-            } else if (toneType === 'digital') {
+            } else if (selectedTone === 'digital') {
                 ringtoneInterval = setInterval(() => {
-                    beep(1200, 0.05); setTimeout(() => beep(1500, 0.05), 80); setTimeout(() => beep(1800, 0.1), 160);
-                }, 800);
-            } else if (toneType === 'marimba') {
+                    playChimeTone([1046.50, 1318.51], 0.06, "sine");
+                    setTimeout(() => playChimeTone([1318.51, 1567.98], 0.06, "sine"), 80);
+                }, 750);
+            } else if (selectedTone === 'marimba') {
                 ringtoneInterval = setInterval(() => {
-                    beep(440, 0.2, "triangle"); setTimeout(() => beep(554.37, 0.2, "triangle"), 100); setTimeout(() => beep(659.25, 0.2, "triangle"), 200);
+                    playChimeTone([440, 554.37, 659.25], 0.25, "sine");
+                    setTimeout(() => playChimeTone([554.37, 659.25, 880], 0.25, "sine"), 150);
                 }, 1200);
-            } else if (toneType === 'chirp') {
+            } else if (selectedTone === 'chirp') {
                 ringtoneInterval = setInterval(() => {
-                    beep(2000, 0.03, "sine"); setTimeout(() => beep(2500, 0.03, "sine"), 40); setTimeout(() => beep(3000, 0.03, "sine"), 80);
-                }, 400);
-            } else if (toneType === 'siren') {
+                    playChimeTone([1800, 2200], 0.04, "triangle");
+                }, 250);
+            } else if (selectedTone === 'ambient') {
                 ringtoneInterval = setInterval(() => {
-                    beep(600, 0.3, "sawtooth"); setTimeout(() => beep(900, 0.3, "sawtooth"), 300);
-                }, 600);
-            } else if (toneType === 'cyber') {
-                ringtoneInterval = setInterval(() => {
-                    beep(800, 0.08, "square"); setTimeout(() => beep(1000, 0.08, "square"), 80); setTimeout(() => beep(1200, 0.08, "square"), 160); setTimeout(() => beep(1600, 0.15, "square"), 240);
-                }, 1100);
-            } else if (toneType === 'ambient') {
-                ringtoneInterval = setInterval(() => {
-                    beep(523.25, 0.4, "sine"); setTimeout(() => beep(659.25, 0.4, "sine"), 200); setTimeout(() => beep(783.99, 0.6, "sine"), 400);
-                }, 1800);
+                    playChimeTone([293.66, 440, 523.25], 0.6, "sine");
+                }, 1600);
             }
         }
 
@@ -448,104 +456,156 @@
             appState.ringtone = document.getElementById('setting-ringtone').value;
             saveStateToDisk();
             startRingtonePlayback();
-            setTimeout(stopRingtonePlayback, 1500);
+            setTimeout(stopRingtonePlayback, 1600);
         }
 
-        // --- PLATFORM CALL PIPELINE ---
-        let timeoutCountdown = 10;
-        let callTimeoutTracker = null;
-        let callDurationInterval = null;
-        let activeCallStartTime = null;
-        let targetCallEntityId = "";
+        // --- REAL P2P TIMING & STATE HANDSHAKING ENGINE ---
+        function initRealTelephonyNetwork() {
+            // Display static ID instantly on screen
+            document.getElementById('my-id-display').innerText = appState.myPermanentId;
 
-        function addCallToLog(id, direction, status) {
-            const now = new Date();
-            const timeString = now.toLocaleDateString() + ' ' + now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-            appState.history.unshift({ id, direction, status, time: timeString });
-            saveStateToDisk();
+            peer = new Peer('ca-' + appState.myPermanentId);
+
+            peer.on('connection', (conn) => {
+                activeDataConnection = conn;
+                setupDataPacketListeners(conn);
+            });
+
+            peer.on('call', (incomingCall) => {
+                activeMediaCall = incomingCall;
+                targetCallEntityId = incomingCall.peer.replace('ca-', '');
+                let remoteRingtone = (incomingCall.options && incomingCall.options.metadata && incomingCall.options.metadata.ringtone) ? incomingCall.options.metadata.ringtone : appState.ringtone;
+                triggerInboundCall(targetCallEntityId, remoteRingtone);
+            });
+
+            peer.on('error', (err) => {
+                console.error("Network interface error logger:", err);
+            });
+        }
+
+        function setupDataPacketListeners(conn) {
+            conn.on('data', (data) => {
+                if (data.type === 'ACCEPT_SIGNAL') {
+                    document.getElementById('outgoing-call-modal').style.display = 'none';
+                    beginSynchronizedTimer(targetCallEntityId);
+                }
+                if (data.type === 'HANGUP_SIGNAL') {
+                    teardownCallUI();
+                }
+            });
+            conn.on('close', () => {
+                teardownCallUI();
+            });
+        }
+
+        function requestHardwarePermissions() {
+            navigator.mediaDevices.getUserMedia({ audio: true })
+                .then(stream => {
+                    hasMicAccess = true;
+                    myStream = stream;
+                    document.getElementById('permission-warning').style.display = 'none';
+                    document.getElementById('btn-accept-call').disabled = false;
+                })
+                .catch(err => {
+                    hasMicAccess = false;
+                    document.getElementById('permission-warning').style.display = 'block';
+                    document.getElementById('btn-accept-call').disabled = true;
+                });
         }
 
         function makeCallFromDialer() {
             const rawId = dialScreen.innerText.trim();
-            if(!rawId) return alert("Enter an ID first.");
+            if(!rawId || rawId === appState.myPermanentId) return alert("Enter a valid external Network ID.");
             simulateOutgoingCall(rawId);
         }
 
         function simulateOutgoingCall(targetId) {
-            if(!hasMicAccess) return alert("Microphone access is mandatory to dial out over real remote channels.");
+            if(!hasMicAccess) return alert("Microphone access required to transmit audio.");
             targetCallEntityId = targetId;
             clearScreen();
 
-            // Initiate a secure voice call to the target device
-            currentCall = peer.call('ca-' + targetId, myStream);
-            
-            addCallToLog(targetCallEntityId, 'Outgoing', 'Answered');
-            launchActiveCallFrame(targetCallEntityId);
+            document.getElementById('outgoing-call-party').innerText = `ID: ${targetId}`;
+            document.getElementById('outgoing-status-text').innerText = "Calling...";
+            document.getElementById('outgoing-call-modal').style.display = 'flex';
 
-            currentCall.on('close', () => {
-                endActiveCall();
+            activeDataConnection = peer.connect('ca-' + targetId);
+            setupDataPacketListeners(activeDataConnection);
+
+            activeMediaCall = peer.call('ca-' + targetId, myStream, {
+                metadata: { ringtone: appState.ringtone }
             });
+
+            activeMediaCall.on('close', () => { teardownCallUI(); });
         }
 
-        function triggerInboundCallSimulation(callerId) {
-            targetCallEntityId = callerId;
+        function triggerInboundCall(callerId, ringtoneToUse) {
             document.getElementById('incoming-caller-id').innerText = `ID: ${callerId}`;
             document.getElementById('incoming-call-modal').style.display = 'flex';
             
-            startRingtonePlayback();
+            startRingtonePlayback(ringtoneToUse);
 
-            timeoutCountdown = 15;
+            if (window.Notification && Notification.permission === "granted") {
+                try {
+                    new Notification(`Incoming Call`, {
+                        body: `Connection requesting audio layer access from node ID: ${callerId}`,
+                        tag: 'call-alert'
+                    });
+                } catch(e) {}
+            }
+
+            let timeoutCountdown = 15;
             document.getElementById('disconnect-timer-countdown').innerText = timeoutCountdown;
             
-            callTimeoutTracker = setInterval(() => {
+            if (incomingTimeoutTracker) clearInterval(incomingTimeoutTracker);
+            incomingTimeoutTracker = setInterval(() => {
                 timeoutCountdown--;
                 document.getElementById('disconnect-timer-countdown').innerText = timeoutCountdown;
                 if(timeoutCountdown <= 0) {
-                    clearInterval(callTimeoutTracker);
-                    stopRingtonePlayback();
-                    document.getElementById('incoming-call-modal').style.display = 'none';
-                    if (currentCall) currentCall.close();
-                    addCallToLog(targetCallEntityId, 'Inbound', 'Missed');
+                    actionDeclineCall();
                 }
             }, 1000);
         }
 
         function actionAcceptCall() {
-            clearInterval(callTimeoutTracker);
+            clearInterval(incomingTimeoutTracker);
             stopRingtonePlayback();
             document.getElementById('incoming-call-modal').style.display = 'none';
             
-            if (currentCall) {
-                currentCall.answer(myStream); // Connect streams
+            if (activeMediaCall) {
+                activeMediaCall.answer(myStream);
+                if (activeDataConnection && activeDataConnection.open) {
+                    activeDataConnection.send({ type: 'ACCEPT_SIGNAL' });
+                }
                 addCallToLog(targetCallEntityId, 'Inbound', 'Answered');
-                launchActiveCallFrame(targetCallEntityId);
-                
-                currentCall.on('close', () => {
-                    endActiveCall();
-                });
+                beginSynchronizedTimer(targetCallEntityId);
+                activeMediaCall.on('close', () => { teardownCallUI(); });
             }
         }
 
         function actionDeclineCall() {
-            clearInterval(callTimeoutTracker);
+            clearInterval(incomingTimeoutTracker);
             stopRingtonePlayback();
             document.getElementById('incoming-call-modal').style.display = 'none';
-            if (currentCall) currentCall.close();
-            addCallToLog(targetCallEntityId, 'Inbound', 'Declined');
+            hangUpCurrentCall();
         }
 
-        function launchActiveCallFrame(partyId) {
+        function beginSynchronizedTimer(partyId) {
             document.getElementById('active-call-modal').style.display = 'flex';
             document.getElementById('active-call-party').innerText = `ID: ${partyId}`;
             
-            // Output audio element connection for WebRTC streams
-            currentCall.on('stream', (userAudioStream) => {
+            activeMediaCall.on('stream', (remoteAudioStream) => {
+                let existingNode = document.getElementById('remote-audio-sink');
+                if (existingNode) existingNode.remove();
+
                 const audioNode = document.createElement('audio');
-                audioNode.srcObject = userAudioStream;
-                audioNode.play();
+                audioNode.id = 'remote-audio-sink';
+                audioNode.srcObject = remoteAudioStream;
+                audioNode.autoplay = true;
+                document.body.appendChild(audioNode);
             });
 
             activeCallStartTime = Date.now();
+            if (callDurationInterval) clearInterval(callDurationInterval);
             callDurationInterval = setInterval(() => {
                 const elapsedSec = Math.floor((Date.now() - activeCallStartTime) / 1000);
                 const mins = String(Math.floor(elapsedSec / 60)).padStart(2, '0');
@@ -554,17 +614,30 @@
             }, 1000);
         }
 
-        function endActiveCall() {
-            clearInterval(callDurationInterval);
-            if(currentCall) {
-                currentCall.close();
-                currentCall = null;
+        function hangUpCurrentCall() {
+            if (activeDataConnection && activeDataConnection.open) {
+                activeDataConnection.send({ type: 'HANGUP_SIGNAL' });
             }
+            teardownCallUI();
+        }
+
+        function teardownCallUI() {
+            stopRingtonePlayback();
+            clearInterval(incomingTimeoutTracker);
+            clearInterval(callDurationInterval);
+            
+            if(activeMediaCall) { activeMediaCall.close(); activeMediaCall = null; }
+            if(activeDataConnection) { activeDataConnection.close(); activeDataConnection = null; }
+            
+            let sink = document.getElementById('remote-audio-sink');
+            if (sink) sink.remove();
+
+            document.getElementById('outgoing-call-modal').style.display = 'none';
+            document.getElementById('incoming-call-modal').style.display = 'none';
             document.getElementById('active-call-modal').style.display = 'none';
             document.getElementById('call-duration-clock').innerText = "00:00";
         }
 
-        // --- STRUCTURAL FUNCTIONS ---
         function switchTab(tabName) {
             document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
             document.querySelectorAll('nav button').forEach(el => el.classList.remove('active'));
@@ -579,6 +652,13 @@
         const dialScreen = document.getElementById('dial-screen');
         function pressKey(val) { if(dialScreen.innerText.length < 12) dialScreen.innerText += val; }
         function clearScreen() { dialScreen.innerText = ''; }
+
+        function addCallToLog(id, direction, status) {
+            const now = new Date();
+            const timeString = now.toLocaleDateString() + ' ' + now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            appState.history.unshift({ id, direction, status, time: timeString });
+            saveStateToDisk();
+        }
 
         function renderContacts() {
             const container = document.getElementById('contacts-list-container');
@@ -622,7 +702,7 @@
         }
 
         function deleteContact(idx) {
-            if(confirm("Delete?")) { appState.contacts.splice(idx, 1); saveStateToDisk(); renderContacts(); }
+            if(confirm("Delete Contact?")) { appState.contacts.splice(idx, 1); saveStateToDisk(); renderContacts(); }
         }
 
         function resetContactForm() {
@@ -633,11 +713,11 @@
 
         function renderHistory() {
             const container = document.getElementById('history-list-container');
-            container.innerHTML = appState.history.length === 0 ? '<p style="color:var(--text-muted); text-align:center; padding: 20px 0;">No logs.</p>' : '';
+            container.innerHTML = appState.history.length === 0 ? '<p style="color:var(--text-muted); text-align:center; padding: 20px 0;">No logs found.</p>' : '';
             appState.history.forEach(log => {
                 const item = document.createElement('div');
                 item.className = 'list-item';
-                item.innerHTML = `<div><b>↗️ ID: ${log.id}</b><div class="meta">${log.time}</div></div>
+                item.innerHTML = `<div><b>↗️ Contact ID: ${log.id}</b><div class="meta">${log.time}</div></div>
                                   <div><span class="badge answered">${log.status}</span></div>`;
                 container.appendChild(item);
             });
@@ -646,7 +726,35 @@
         function clearAllLogs() { appState.history = []; saveStateToDisk(); renderHistory(); }
         function signOutSimulation() { window.location.reload(); }
         function deleteAccountSimulation() { localStorage.clear(); window.location.reload(); }
-        function requestNotificationPermission() { alert("System notification channels enabled!"); }
+        
+        function requestNotificationPermission() { 
+            if (!("Notification" in window)) {
+                alert("This browser variant does not support system push architecture.");
+                return;
+            }
+            try {
+                Notification.requestPermission().then(permission => {
+                    handlePermissionStatus(permission);
+                }).catch(() => {
+                    Notification.requestPermission(function(permission) {
+                        handlePermissionStatus(permission);
+                    });
+                });
+            } catch(error) {
+                Notification.requestPermission(function(permission) {
+                    handlePermissionStatus(permission);
+                });
+            }
+        }
+
+        function handlePermissionStatus(status) {
+            if (status === "granted") {
+                alert("System notification bindings initialized successfully!");
+                document.getElementById('btn-notifications-trigger').innerText = "✅ Notifications Active";
+            } else {
+                alert("Permissions denied or dismissed.");
+            }
+        }
         
         function applyConfiguredTheme() {
             document.body.setAttribute('data-theme', appState.theme);
@@ -669,8 +777,18 @@
         }
 
         window.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('setting-ringtone').value = appState.ringtone;
             applyConfiguredTheme();
+            
+            // Instantly start network and display ID!
+            initRealTelephonyNetwork();
+            
+            // Check for microphone in background
             requestHardwarePermissions();
+            
+            if(window.Notification && Notification.permission === "granted") {
+                document.getElementById('btn-notifications-trigger').innerText = "✅ Notifications Active";
+            }
         });
     </script>
 </body>
