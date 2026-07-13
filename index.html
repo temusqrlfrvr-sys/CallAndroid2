@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>CallAndroid Web Phone</title>
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <style>
         :root {
             --bg-color: #1e293b;
@@ -47,7 +48,6 @@
             color: var(--text-main);
         }
 
-        /* --- THE GRID ENGINE FIX --- */
         body { 
             display: grid;
             grid-template-columns: 260px 1fr;
@@ -70,7 +70,6 @@
             padding-top: env(safe-area-inset-top, 10px);
         }
 
-        /* --- DESKTOP NAVIGATION --- */
         nav { 
             background: var(--nav-bg); 
             color: white; 
@@ -85,7 +84,6 @@
         nav button:hover { background: rgba(255,255,255,0.05); color: white; }
         nav button.active { background: var(--primary-color); color: white; border-right: 4px solid #60a5fa; }
 
-        /* --- MAIN CONTAINER --- */
         main { 
             grid-column: 2;
             width: 100%;
@@ -109,7 +107,6 @@
         .tab-content.active { display: block; }
         h2 { margin-bottom: 20px; font-size: 1.5rem; border-bottom: 2px solid var(--border-color); padding-bottom: 10px; }
 
-        /* --- KEYPAD STYLING --- */
         .my-id-box { background: rgba(59, 130, 246, 0.1); border: 1px dashed var(--primary-color); padding: 12px; border-radius: 8px; text-align: center; margin-bottom: 20px; font-weight: bold; color: var(--primary-color); font-size: 0.95rem; }
         .display-screen { width: 100%; padding: 15px; font-size: 2rem; letter-spacing: 2px; text-align: right; border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 20px; background: rgba(0,0,0,0.15); min-height: 72px; word-break: break-all; color: var(--text-main); }
         .keypad-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; max-width: 300px; margin: 0 auto; justify-items: center; }
@@ -136,12 +133,10 @@
         .btn-call { background: var(--success-color); }
         .btn-clear { background: var(--text-muted); }
 
-        /* --- COMPONENTS --- */
         input, select, button.btn-standard { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid var(--border-color); border-radius: 8px; font-size: 1rem; background: rgba(0,0,0,0.1); color: var(--text-main); outline: none; -webkit-appearance: none; }
         button.btn-standard { background: var(--primary-color); color: white; border: none; font-weight: bold; cursor: pointer; }
         button.btn-danger { background: var(--danger-color); }
 
-        /* --- LISTS --- */
         .list-item { display: flex; justify-content: space-between; align-items: center; padding: 14px 6px; border-bottom: 1px solid var(--border-color); }
         .item-details .name { font-weight: 600; }
         .item-details .meta { font-size: 0.8rem; color: var(--text-muted); margin-top: 4px; }
@@ -153,7 +148,6 @@
         .badge.answered { background: var(--success-color); }
         .badge.declined { background: #7c3aed; }
 
-        /* --- OVERLAYS --- */
         .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); align-items: center; justify-content: center; z-index: 1000; padding: 20px; }
         .modal { background: var(--panel-bg); color: var(--text-main); padding: 30px; border-radius: 16px; width: 100%; max-width: 360px; text-align: center; }
         .modal h3 { margin-bottom: 10px; font-size: 1.6rem; }
@@ -161,11 +155,10 @@
         .modal-buttons { display: flex; gap: 15px; margin-top: 25px; }
         .modal-buttons button { flex: 1; padding: 14px; border: none; border-radius: 30px; font-weight: bold; font-size: 1rem; color: white; }
 
-        /* --- IPHONE & MOBILE VIEW FIX --- */
         @media (max-width: 768px) {
             body {
                 grid-template-columns: 1fr;
-                grid-template-rows: 1fr 75px; /* Explicit space for bottom bar */
+                grid-template-rows: 1fr 75px;
             }
 
             nav {
@@ -220,7 +213,7 @@
 </head>
 <body>
 
-    <div id="permission-warning">⚠️ Microphone access blocked. You cannot answer calls until granted.</div>
+    <div id="permission-warning">⚠️ Microphone access blocked. Please enable mic permissions to place/receive calls.</div>
 
     <nav>
         <div class="logo">🤖 CallAndroid</div>
@@ -233,7 +226,7 @@
     <main>
         <div id="tab-keypad" class="tab-content active">
             <h2>Dialer</h2>
-            <div class="my-id-box">Your Permanent ID: <span id="my-id-display">7736</span></div>
+            <div class="my-id-box">Your Network ID: <span id="my-id-display">Connecting...</span></div>
             <div class="display-screen" id="dial-screen"></div>
             
             <div class="keypad-grid">
@@ -266,7 +259,7 @@
                 <h4 id="contact-form-title">Add New Contact</h4>
                 <input type="hidden" id="edit-index">
                 <input type="text" id="contact-name" placeholder="Contact Name">
-                <input type="text" id="contact-id" placeholder="4-Digit Code" inputmode="numeric" maxlength="4">
+                <input type="text" id="contact-id" placeholder="4-Digit Network ID" inputmode="numeric" maxlength="4">
                 <button class="btn-standard" id="btn-save-contact" onclick="saveContact()">Add Contact</button>
                 <button class="btn-standard" id="btn-cancel-edit" style="background:var(--text-muted); display:none; margin-top:4px;" onclick="resetContactForm()">Cancel Edit</button>
             </div>
@@ -329,15 +322,12 @@
     </div>
 
     <script>
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('data:application/javascript;base64,Ly8gU2VydmljZSBXb3JrZXI=')
-            .catch(err => console.log("SW log bypassed: ", err));
-        }
-
         let hasMicAccess = false;
         let audioCtx = null;
         let ringtoneInterval = null;
-        let liveCallOscillator = null; 
+        let myStream = null;
+        let peer = null;
+        let currentCall = null;
 
         let appState = {
             myPermanentId: localStorage.getItem('ca_my_id') || String(Math.floor(1000 + Math.random() * 9000)),
@@ -348,6 +338,7 @@
         };
 
         localStorage.setItem('ca_my_id', appState.myPermanentId);
+        
         function saveStateToDisk() {
             localStorage.setItem('ca_contacts', JSON.stringify(appState.contacts));
             localStorage.setItem('ca_history', JSON.stringify(appState.history));
@@ -355,45 +346,51 @@
             localStorage.setItem('ca_theme', appState.theme);
         }
 
-        // --- HARDWARE ACCESS ---
+        // --- REAL NETWORKING WITH PEERJS ---
+        function initRealTelephonyNetwork() {
+            // Setup this instance as a unique global node identifier
+            peer = new Peer('ca-' + appState.myPermanentId);
+
+            peer.on('open', (id) => {
+                document.getElementById('my-id-display').innerText = appState.myPermanentId;
+            });
+
+            peer.on('error', (err) => {
+                console.error("Network Error: ", err.type);
+                if(err.type === 'unavailable-id') {
+                    // If ID is taken on the system, generate a clean one
+                    appState.myPermanentId = String(Math.floor(1000 + Math.random() * 9000));
+                    localStorage.setItem('ca_my_id', appState.myPermanentId);
+                    window.location.reload();
+                }
+            });
+
+            // Handlers for catching incoming calls over the internet
+            peer.on('call', (incomingCall) => {
+                currentCall = incomingCall;
+                let remoteId = incomingCall.peer.replace('ca-', '');
+                triggerInboundCallSimulation(remoteId);
+            });
+        }
+
         function requestHardwarePermissions() {
             navigator.mediaDevices.getUserMedia({ audio: true })
                 .then(stream => {
                     hasMicAccess = true;
+                    myStream = stream;
                     document.getElementById('permission-warning').style.display = 'none';
                     document.getElementById('btn-accept-call').disabled = false;
-                    stream.getTracks().forEach(track => track.stop());
+                    initRealTelephonyNetwork();
                 })
                 .catch(err => {
                     hasMicAccess = false;
                     document.getElementById('permission-warning').style.display = 'block';
                     document.getElementById('btn-accept-call').disabled = true;
-                    console.warn(err);
+                    initRealTelephonyNetwork(); // Start network anyway to view logs
                 });
         }
 
-        // --- THEME ENGINE ---
-        function applyConfiguredTheme() {
-            document.body.setAttribute('data-theme', appState.theme);
-            const btn = document.getElementById('theme-toggle-btn');
-            if (appState.theme === 'dark') {
-                btn.innerText = "☀️ Switch to Light Mode";
-                btn.style.background = "#ffffff";
-                btn.style.color = "#0f172a";
-            } else {
-                btn.innerText = "🌙 Switch to Dark Mode";
-                btn.style.background = "#1e293b";
-                btn.style.color = "#ffffff";
-            }
-        }
-
-        function toggleAppTheme() {
-            appState.theme = appState.theme === 'dark' ? 'light' : 'dark';
-            saveStateToDisk();
-            applyConfiguredTheme();
-        }
-
-        // --- AUDIO ENGINE ---
+        // --- RINGTONES ---
         function startRingtonePlayback() {
             if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             const toneType = appState.ringtone;
@@ -454,7 +451,7 @@
             setTimeout(stopRingtonePlayback, 1500);
         }
 
-        // --- TELEPHONY (GUARANTEED PIPELINE) ---
+        // --- PLATFORM CALL PIPELINE ---
         let timeoutCountdown = 10;
         let callTimeoutTracker = null;
         let callDurationInterval = null;
@@ -475,31 +472,78 @@
         }
 
         function simulateOutgoingCall(targetId) {
+            if(!hasMicAccess) return alert("Microphone access is mandatory to dial out over real remote channels.");
             targetCallEntityId = targetId;
             clearScreen();
+
+            // Initiate a secure voice call to the target device
+            currentCall = peer.call('ca-' + targetId, myStream);
             
-            // Core Pipeline Guarantee: Connections execute directly without failing drops
             addCallToLog(targetCallEntityId, 'Outgoing', 'Answered');
             launchActiveCallFrame(targetCallEntityId);
+
+            currentCall.on('close', () => {
+                endActiveCall();
+            });
+        }
+
+        function triggerInboundCallSimulation(callerId) {
+            targetCallEntityId = callerId;
+            document.getElementById('incoming-caller-id').innerText = `ID: ${callerId}`;
+            document.getElementById('incoming-call-modal').style.display = 'flex';
+            
+            startRingtonePlayback();
+
+            timeoutCountdown = 15;
+            document.getElementById('disconnect-timer-countdown').innerText = timeoutCountdown;
+            
+            callTimeoutTracker = setInterval(() => {
+                timeoutCountdown--;
+                document.getElementById('disconnect-timer-countdown').innerText = timeoutCountdown;
+                if(timeoutCountdown <= 0) {
+                    clearInterval(callTimeoutTracker);
+                    stopRingtonePlayback();
+                    document.getElementById('incoming-call-modal').style.display = 'none';
+                    if (currentCall) currentCall.close();
+                    addCallToLog(targetCallEntityId, 'Inbound', 'Missed');
+                }
+            }, 1000);
+        }
+
+        function actionAcceptCall() {
+            clearInterval(callTimeoutTracker);
+            stopRingtonePlayback();
+            document.getElementById('incoming-call-modal').style.display = 'none';
+            
+            if (currentCall) {
+                currentCall.answer(myStream); // Connect streams
+                addCallToLog(targetCallEntityId, 'Inbound', 'Answered');
+                launchActiveCallFrame(targetCallEntityId);
+                
+                currentCall.on('close', () => {
+                    endActiveCall();
+                });
+            }
+        }
+
+        function actionDeclineCall() {
+            clearInterval(callTimeoutTracker);
+            stopRingtonePlayback();
+            document.getElementById('incoming-call-modal').style.display = 'none';
+            if (currentCall) currentCall.close();
+            addCallToLog(targetCallEntityId, 'Inbound', 'Declined');
         }
 
         function launchActiveCallFrame(partyId) {
             document.getElementById('active-call-modal').style.display = 'flex';
             document.getElementById('active-call-party').innerText = `ID: ${partyId}`;
             
-            // Audio Context Stream Initialization
-            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            
-            try {
-                liveCallOscillator = audioCtx.createOscillator();
-                let liveCallGain = audioCtx.createGain();
-                liveCallOscillator.type = "sine";
-                liveCallOscillator.frequency.setValueAtTime(350, audioCtx.currentTime); // Standard dial line comfort tone
-                liveCallGain.gain.setValueAtTime(0.02, audioCtx.currentTime); 
-                liveCallOscillator.connect(liveCallGain);
-                liveCallGain.connect(audioCtx.destination);
-                liveCallOscillator.start();
-            } catch(e) { console.log(e); }
+            // Output audio element connection for WebRTC streams
+            currentCall.on('stream', (userAudioStream) => {
+                const audioNode = document.createElement('audio');
+                audioNode.srcObject = userAudioStream;
+                audioNode.play();
+            });
 
             activeCallStartTime = Date.now();
             callDurationInterval = setInterval(() => {
@@ -512,15 +556,15 @@
 
         function endActiveCall() {
             clearInterval(callDurationInterval);
-            if(liveCallOscillator) {
-                try { liveCallOscillator.stop(); } catch(e){}
-                liveCallOscillator = null;
+            if(currentCall) {
+                currentCall.close();
+                currentCall = null;
             }
             document.getElementById('active-call-modal').style.display = 'none';
             document.getElementById('call-duration-clock').innerText = "00:00";
         }
 
-        // --- INTERFACE AND VIEWPORTS ---
+        // --- STRUCTURAL FUNCTIONS ---
         function switchTab(tabName) {
             document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
             document.querySelectorAll('nav button').forEach(el => el.classList.remove('active'));
@@ -603,10 +647,28 @@
         function signOutSimulation() { window.location.reload(); }
         function deleteAccountSimulation() { localStorage.clear(); window.location.reload(); }
         function requestNotificationPermission() { alert("System notification channels enabled!"); }
+        
+        function applyConfiguredTheme() {
+            document.body.setAttribute('data-theme', appState.theme);
+            const btn = document.getElementById('theme-toggle-btn');
+            if (appState.theme === 'dark') {
+                btn.innerText = "☀️ Switch to Light Mode";
+                btn.style.background = "#ffffff";
+                btn.style.color = "#0f172a";
+            } else {
+                btn.innerText = "🌙 Switch to Dark Mode";
+                btn.style.background = "#1e293b";
+                btn.style.color = "#ffffff";
+            }
+        }
+
+        function toggleAppTheme() {
+            appState.theme = appState.theme === 'dark' ? 'light' : 'dark';
+            saveStateToDisk();
+            applyConfiguredTheme();
+        }
 
         window.addEventListener('DOMContentLoaded', () => {
-            document.getElementById('my-id-display').innerText = appState.myPermanentId;
-            document.getElementById('setting-ringtone').value = appState.ringtone;
             applyConfiguredTheme();
             requestHardwarePermissions();
         });
