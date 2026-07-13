@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>CallAndroid Web Phone</title>
     <style>
         :root {
@@ -45,12 +45,12 @@
             color: var(--text-main); 
             display: flex; 
             flex-direction: row;
-            height: 100vh; 
+            height: 100vh;
+            height: 100dvh; /* Fixes iOS Safari address bar height issue */
             overflow: hidden; 
             transition: background 0.3s, color 0.3s; 
         }
 
-        /* Permission Warning Bar */
         #permission-warning {
             display: none;
             background: var(--danger-color);
@@ -171,7 +171,7 @@
 
         /* --- RESPONSIVE MOBILE BREAKPOINT --- */
         @media (max-width: 768px) {
-            --nav-height: 65px;
+            --nav-height: 75px;
             body { flex-direction: column-reverse; }
             
             nav {
@@ -179,6 +179,7 @@
                 width: 100%;
                 height: var(--nav-height);
                 padding: 0;
+                padding-bottom: env(safe-area-inset-bottom); /* Fixes iPhone home bar overlay */
                 justify-content: space-around;
                 border-top: 1px solid var(--border-color);
             }
@@ -204,19 +205,20 @@
 
             main {
                 padding: 16px;
-                height: calc(100vh - var(--nav-height));
+                height: calc(100dvh - var(--nav-height));
                 align-items: flex-start;
-                margin-top: 20px;
+                margin-top: 10px;
             }
             .tab-content {
-                padding: 20px;
+                padding: 10px;
                 box-shadow: none;
                 background: transparent;
             }
+            .keypad-grid { gap: 12px; }
             .key {
-                width: 66px;
-                height: 66px;
-                font-size: 1.4rem;
+                width: 62px;
+                height: 62px;
+                font-size: 1.3rem;
             }
         }
     </style>
@@ -269,7 +271,7 @@
                 <h4 id="contact-form-title">Add New Contact</h4>
                 <input type="hidden" id="edit-index">
                 <input type="text" id="contact-name" placeholder="Contact Name">
-                <input type="text" id="contact-id" placeholder="4-Digit Code (e.g. 7736)" inputmode="numeric" maxlength="4">
+                <input type="text" id="contact-id" placeholder="4-Digit Code" inputmode="numeric" maxlength="4">
                 <button class="btn-standard" id="btn-save-contact" onclick="saveContact()">Add Contact</button>
                 <button class="btn-standard" id="btn-cancel-edit" style="background:var(--text-muted); display:none; margin-top:4px;" onclick="resetContactForm()">Cancel Edit</button>
             </div>
