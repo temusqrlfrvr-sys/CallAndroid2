@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CallAndroid Web Phone</title>
+    <style>
+        /* Modern CSS Variables supporting both light and dark systems */
+        :root {
+            --bg-color: #1e293b;
+            --panel-bg: #334155;
+            --nav-bg: #0f172a;
+            --primary-color: #3b82f6;
+            --primary-hover: #2563eb;
+            --success-color: #22c55e;
+            --danger-color: #ef4444;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --border-color: #475569;
+        }
+
+        /* Light Mode Overrides */
+        [data-theme="light"] {
+            --bg-color: #f4f6f9;
+            --panel-bg: #ffffff;
+            --nav-bg: #1e293b;
+            --primary-color: #2563eb;
+            --primary-hover: #1d4ed8;
+            --success-color: #16a34a;
+            --danger-color: #dc2626;
+            --text-main: #1f2937;
+            --text-muted: #6b7280;
+            --border-color: #e5e7eb;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background: var(--bg-color); color: var(--text-main); display: flex; height: 100vh; overflow: hidden; transition: background 0.3s, color 0.3s; }
+
+        /* Sidebar Navigation */
+        nav { width: 260px; background: var(--nav-bg); color: white; display: flex; flex-direction: column; padding: 20px 0; transition: background 0.3s; }
+        nav .logo { padding: 0 20px 20px; font-size: 1.2rem; font-weight: bold; border-bottom: 1px solid #334155; margin-bottom: 20px; color: #3b82f6; }
+        nav button { background: none; border: none; color: #94a3b8; padding: 14px 20px; text-align: left; font-size: 1rem; cursor: pointer; width: 100%; transition: all 0.2s; }
+        nav button:hover { background: #334155; color: white; }
+        nav button.active { background: var(--primary-color); color: white; border-right: 4px solid #60a5fa; }
+
+        /* Main Content Container */
+        main { flex: 1; padding: 40px; overflow-y: auto; position: relative; }
+        .tab-content { display: none; max-width: 600px; margin: 0 auto; background: var(--panel-bg); padding: 30px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); transition: background 0.3s; }
+        .tab-content.active { display: block; }
+        h2 { margin-bottom: 20px; font-size: 1.5rem; border-bottom: 2px solid var(--border-color); padding-bottom: 10px; }
+
+        /* Keypad Styling */
+        .my-id-box { background: rgba(59, 130, 246, 0.1); border: 1px dashed var(--primary-color); padding: 12px; border-radius: 8px; text-align: center; margin-bottom: 20px; font-weight: bold; color: var(--primary-color); }
+        .display-screen { width: 100%; padding: 15px; font-size: 1.8rem; text-align: right; border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 20px; background: rgba(0,0,0,0.05); min-height: 68px; word-break: break-all; color: var(--text-main); }
+        .keypad-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; max-width: 320px; margin: 0 auto; }
+        .key { background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); padding: 18px; font-size: 1.4rem; font-weight: bold; border-radius: 50%; cursor: pointer; text-align: center; width: 70px; height: 70px; margin: 0 auto; display: flex; align-items: center; justify-content: center; transition: background 0.1s; color: var(--text-main); }
+        [data-theme="light"] .key { background: #f3f4f6; }
+        .key:active { background: rgba(255,255,255,0.15); }
+        [data-theme="light"] .key:active { background: #e5e7eb; }
+        .action-keys { display: flex; justify-content: space-around; max-width: 320px; margin: 20px auto 0; gap: 12px; }
+        .btn-action { flex: 1; padding: 12px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; text-align: center; color: white; }
+        .btn-call { background: var(--success-color); }
+        .btn-clear { background: var(--text-muted); }
+
+        /* Forms & Interactive Components */
+        input, select, button.btn-standard { width: 100%; padding: 10px; margin: 8px 0; border: 1px solid var(--border-color); border-radius: 6px; font-size: 1rem; background: rgba(0,0,0,0.02); color: var(--text-main); }
+        [data-theme="dark"] input, [data-theme="dark"] select { background: rgba(0,0,0,0.2); }
+        button.btn-standard { background: var(--primary-color); color: white; border: none; font-weight: bold; cursor: pointer; }
+        button.btn-standard:hover { background: var(--primary-hover); }
+        button.btn-danger { background: var(--danger-color); }
+
+        /* Lists (Contacts / History) */
+        .list-item { display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid var(--border-color); }
+        .list-item:last-child { border-bottom: none; }
+        .item-details .name { font-weight: bold; }
+        .item-details .meta { font-size: 0.85rem; color: var(--text-muted); margin-top: 2px; }
+        .item-actions button { background: none; border: none; margin-left: 10px; cursor: pointer; font-size: 0.9rem; font-weight: bold; }
+        .action-call { color: var(--success-color); }
+        .action-edit { color: var(--primary-color); }
+        .action-delete { color: var(--danger-color); }
+
+        /* Call Status Badge Colors */
+        .badge { padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; color: white; }
+        .badge.missed { background: var(--danger-color); }
+        .badge.outgoing { background: var(--primary-color); }
+        .badge.answered { background: var(--success-color); }
+        .badge.declined { background: #7c3aed; }
+
+        /* Overlay Modals */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); align-items: center; justify-content: center; z-index: 1000; }
+        .modal { background: var(--panel-bg); color: var(--text-main); padding: 30px; border-radius: 12px; width: 90%; max-width: 400px; text-align: center; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.3); }
+        .modal h3 { margin-bottom: 10px; font-size: 1.6rem; }
+        .modal .timer { font-size: 1.2rem; color: var(--danger-color); margin: 15px 0; font-weight: bold; }
+        .modal-buttons { display: flex; gap: 15px; margin-top: 20px; }
+        .modal-buttons button { flex: 1; padding: 12px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; color: white; }
+    </style>
+</head>
+<body>
+
+    <nav>
+        <div class="logo">🤖 CallAndroid</div>
+        <button id="nav-keypad" class="active" onclick="switchTab('keypad')">🎛️ Keypad</button>
+        <button id="nav-contacts" onclick="switchTab('contacts')">👥 Contacts</button>
+        <button id="nav-history" onclick="switchTab('history')">📜 Call History</button>
+        <button id="nav-settings" onclick="switchTab('settings')">⚙️ Settings</button>
+    </nav>
+
+    <main>
+        <div id="tab-keypad" class="tab-content active">
+            <h2>Dialer</h2>
+            <div class="my-id-box">Your Permanent ID: <span id="my-id-display">Generating...</span></div>
+            <div class="display-screen" id="dial-screen"></div>
+            
+            <div class="keypad-grid">
+                <div class="key" onclick="pressKey('1')">1</div>
+                <div class="key" onclick="pressKey('2')">2</div>
+                <div class="key" onclick="pressKey('3')">3</div>
+                <div class="key" onclick="pressKey('4')">4</div>
+                <div class="key" onclick="pressKey('5')">5</div>
+                <div class="key" onclick="pressKey('6')">6</div>
+                <div class="key" onclick="pressKey('7')">7</div>
+                <div class="key" onclick="pressKey('8')">8</div>
+                <div class="key" onclick="pressKey('9')">9</div>
+                <div class="key" onclick="pressKey('*')">*</div>
+                <div class="key" onclick="pressKey('0')">0</div>
+                <div class="key" onclick="pressKey('#')">#</div>
+            </div>
+            
+            <div class="action-keys">
+                <button class="btn-action btn-clear" onclick="clearScreen()">Clear</button>
+                <button class="btn-action btn-call" onclick="makeCallFromDialer()">Call Target</button>
+            </div>
+            <div style="margin-top:20px; text-align:center;">
+                <button class="btn-standard" style="background:#4b5563;" onclick="requestNotificationPermission()">🔔 Enable Device Call Notifications</button>
+            </div>
+        </div>
+
+        <div id="tab-contacts" class="tab-content">
+            <h2>My Contacts</h2>
+            <div style="background: rgba(0,0,0,0.05); padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid var(--border-color);">
+                <h4 id="contact-form-title">Add New Contact</h4>
+                <input type="hidden" id="edit-index">
+                <input type="text" id="contact-name" placeholder="Contact Name">
+                <input type="text" id="contact-id" placeholder="4-Digit Code (e.g. 7736)">
+                <button class="btn-standard" id="btn-save-contact" onclick="saveContact()">Add Contact</button>
+                <button class="btn-standard" id="btn-cancel-edit" style="background:var(--text-muted); display:none; margin-top:0;" onclick="resetContactForm()">Cancel Edit</button>
+            </div>
+            <div id="contacts-list-container"></div>
+        </div>
+
+        <div id="tab-history" class="tab-content">
+            <h2>Call Logs</h2>
+            <div style="text-align: right; margin-bottom: 10px;">
+                <button onclick="clearAllLogs()" style="background: none; border: none; color: var(--danger-color); font-weight: bold; cursor: pointer;">🗑️ Clear Logs</button>
+            </div>
+            <div id="history-list-container"></div>
+        </div>
+
+        <div id="tab-settings" class="tab-content">
+            <h2>Preferences & Profile Settings</h2>
+            
+            <div style="margin-bottom: 25px;">
+                <label style="font-weight: bold; display: block; margin-bottom: 8px;">Interface Theme:</label>
+                <button class="btn-standard" id="theme-toggle-btn" style="background: #e2e8f0; color: #0f172a;" onclick="toggleAppTheme()">🌙 Switch to Dark Mode</button>
+            </div>
+
+            <div style="margin-bottom: 25px;">
+                <label style="font-weight: bold; display: block; margin-bottom: 5px;">Ringtone Selection:</label>
+                <select id="setting-ringtone" onchange="previewRingtone()">
+                    <option value="classic">Classic Electronic Bell</option>
+                    <option value="digital">Digital Retro Melody</option>
+                    <option value="marimba">Modern Soft Marimba Chime</option>
+                </select>
+            </div>
+            <hr style="border:0; border-top:1px solid var(--border-color); margin: 20px 0;">
+            <button class="btn-standard" style="background:#475569;" onclick="signOutSimulation()">Sign Out Account</button>
+            <button class="btn-standard btn-danger" onclick="deleteAccountSimulation()">Permanently Delete Profile Data</button>
+        </div>
+    </main>
+
+    <div id="incoming-call-modal" class="modal-overlay">
+        <div class="modal" style="border-top: 8px solid var(--primary-color);">
+            <p style="text-transform: uppercase; font-size:0.8rem; font-weight:bold; color:var(--text-muted)">Incoming Web Call</p>
+            <h3 id="incoming-caller-id">ID: 0000</h3>
+            <div class="timer">Auto-disconnecting in: <span id="disconnect-timer-countdown">10</span>s</div>
+            <div class="modal-buttons">
+                <button style="background: var(--danger-color);" onclick="actionDeclineCall()">Decline</button>
+                <button style="background: var(--success-color);" onclick="actionAcceptCall()">Accept Call</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="active-call-modal" class="modal-overlay">
+        <div class="modal" style="border-top: 8px solid var(--success-color);">
+            <p style="text-transform: uppercase; font-size:0.8rem; font-weight:bold; color:var(--text-muted)">Connected Call</p>
+            <h3 id="active-call-party">ID: 0000</h3>
+            <p style="margin: 15px 0; font-size: 1.2rem; font-weight: bold; color: var(--success-color);" id="call-duration-clock">00:00</p>
+            <button class="btn-standard btn-danger" style="width:auto; padding: 10px 30px;" onclick="endActiveCall()">Hang Up</button>
+        </div>
+    </div>
+
+    <script>
+        // --- DATA LAYER ---
+        let appState = {
+            // Modified: Now generates a strict 4-digit code format (e.g. 7736)
+            myPermanentId: localStorage.getItem('ca_my_id') || String(Math.floor(1000 + Math.random() * 9000)),
+            contacts: JSON.parse(localStorage.getItem('ca_contacts')) || [],
+            history: JSON.parse(localStorage.getItem('ca_history')) || [],
+            ringtone: localStorage.getItem('ca_ringtone') || 'classic',
+            theme: localStorage.getItem('ca_theme') || 'dark' // Defaulting layout structure to system dark
+        };
+
+        localStorage.setItem('ca_my_id', appState.myPermanentId);
+        function saveStateToDisk() {
+            localStorage.setItem('ca_contacts', JSON.stringify(appState.contacts));
+            localStorage.setItem('ca_history', JSON.stringify(appState.history));
+            localStorage.setItem('ca_ringtone', appState.ringtone);
+            localStorage.setItem('ca_theme', appState.theme);
+        }
+
+        // --- THEME SWAP ENGINE ---
+        function applyConfiguredTheme() {
+            document.body.setAttribute('data-theme', appState.theme);
+            const btn = document.getElementById('theme-toggle-btn');
+            if (appState.theme === 'dark') {
+                btn.innerText = "☀️ Switch to Light Mode";
+                btn.style.background = "#ffffff";
+                btn.style.color = "#0f172a";
+            } else {
+                btn.innerText = "🌙 Switch to Dark Mode";
+                btn.style.background = "#1e293b";
+                btn.style.color = "#ffffff";
+            }
+        }
+
+        function toggleAppTheme() {
+            appState.theme = appState.theme === 'dark' ? 'light' : 'dark';
+            saveStateToDisk();
+            applyConfiguredTheme();
+        }
+
+        // --- AUDIO ENGINE ---
+        let audioCtx = null;
+        let ringtoneInterval = null;
+
+        function startRingtonePlayback() {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const toneType = appState.ringtone;
+            
+            function beep(freq, duration, type="sine") {
+                if(!audioCtx) return;
+                let osc = audioCtx.createOscillator();
+                let gainNode = audioCtx.createGain();
+                osc.type = type;
+                osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+                gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+                osc.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + duration);
+            }
+
+            if (toneType === 'classic') {
+                ringtoneInterval = setInterval(() => {
+                    beep(880, 0.1, "sawtooth"); setTimeout(() => beep(880, 0.1, "sawtooth"), 150);
+                }, 1000);
+            } else if (toneType === 'digital') {
+                ringtoneInterval = setInterval(() => {
+                    beep(1200, 0.05); setTimeout(() => beep(1500, 0.05), 80); setTimeout(() => beep(1800, 0.1), 160);
+                }, 800);
+            } else if (toneType === 'marimba') {
+                ringtoneInterval = setInterval(() => {
+                    beep(440, 0.2, "triangle"); setTimeout(() => beep(554.37, 0.2, "triangle"), 100); setTimeout(() => beep(659.25, 0.2, "triangle"), 200);
+                }, 1200);
+            }
+        }
+
+        function stopRingtonePlayback() {
+            if (ringtoneInterval) { clearInterval(ringtoneInterval); ringtoneInterval = null; }
+        }
+
+        function previewRingtone() {
+            appState.ringtone = document.getElementById('setting-ringtone').value;
+            saveStateToDisk();
+            startRingtonePlayback();
+            setTimeout(stopRingtonePlayback, 1500);
+        }
+
+        // --- NAVIGATION & TABS ---
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('nav button').forEach(el => el.classList.remove('active'));
+            
+            document.getElementById(`tab-${tabName}`).classList.add('active');
+            document.getElementById(`nav-${tabName}`).classList.add('active');
+
+            if (tabName === 'contacts') renderContacts();
+            if (tabName === 'history') renderHistory();
+        }
+
+        // --- KEYPAD CORE LOGIC ---
+        const dialScreen = document.getElementById('dial-screen');
+        function pressKey(val) { dialScreen.innerText += val; }
+        function clearScreen() { dialScreen.innerText = ''; }
+
+        document.addEventListener('keydown', (e) => {
+            if (document.getElementById('tab-keypad').classList.contains('active')) {
+                if (/[0-9*#]/.test(e.key)) pressKey(e.key);
+                if (e.key === 'Backspace') dialScreen.innerText = dialScreen.innerText.slice(0, -1);
+                if (e.key === 'Enter') makeCallFromDialer();
+            }
+        });
+
+        // --- NOTIFICATIONS MANAGEMENT ---
+        function requestNotificationPermission() {
+            if (!("Notification" in window)) return alert("This browser context does not support native desktop notifications.");
+            Notification.requestPermission().then(permission => {
+                if(permission === "granted") alert("System permissions configured successfully!");
+            });
+        }
+
+        // --- REALISTIC CALL FLOW SIMULATION SYSTEM ---
+        let timeoutCountdown = 10;
+        let callTimeoutTracker = null;
+        let callDurationInterval = null;
+        let activeCallStartTime = null;
+        let targetCallEntityId = "";
+
+        function addCallToLog(id, direction, status) {
+            const now = new Date();
+            const timeString = now.toLocaleDateString() + ' ' + now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            appState.history.unshift({ id, direction, status, time: timeString });
+            saveStateToDisk();
+        }
+
+        function makeCallFromDialer() {
+            const rawId = dialScreen.innerText.trim();
+            if(!rawId) return alert("Please enter a valid target ID.");
+            simulateOutgoingCall(rawId);
+        }
+
+        function simulateOutgoingCall(targetId) {
+            targetCallEntityId = targetId;
+            clearScreen();
+            
+            const roll = Math.random();
+            if (roll < 0.35) {
+                addCallToLog(targetCallEntityId, 'Outgoing', 'Answered');
+                launchActiveCallFrame(targetCallEntityId);
+            } else if (roll < 0.70) {
+                alert(`Call to ${targetCallEntityId} was rejected by the remote device.`);
+                addCallToLog(targetCallEntityId, 'Outgoing', 'Declined');
+            } else {
+                alert(`No answer from structural node ID ${targetCallEntityId}.`);
+                addCallToLog(targetCallEntityId, 'Outgoing', 'Missed');
+            }
+        }
+
+        function triggerInboundCallSimulation(callerId) {
+            targetCallEntityId = callerId;
+            document.getElementById('incoming-caller-id').innerText = `ID: ${callerId}`;
+            document.getElementById('incoming-call-modal').style.display = 'flex';
+            
+            startRingtonePlayback();
+
+            if (Notification.permission === "granted") {
+                new Notification("CallAndroid - Incoming Call", { body: `Incoming call request from ID: ${callerId}` });
+            }
+
+            timeoutCountdown = 10;
+            document.getElementById('disconnect-timer-countdown').innerText = timeoutCountdown;
+            
+            callTimeoutTracker = setInterval(() => {
+                timeoutCountdown--;
+                document.getElementById('disconnect-timer-countdown').innerText = timeoutCountdown;
+                if(timeoutCountdown <= 0) {
+                    clearInterval(callTimeoutTracker);
+                    stopRingtonePlayback();
+                    document.getElementById('incoming-call-modal').style.display = 'none';
+                    addCallToLog(targetCallEntityId, 'Inbound', 'Missed');
+                }
+            }, 1000);
+        }
+
+        function actionAcceptCall() {
+            clearInterval(callTimeoutTracker);
+            stopRingtonePlayback();
+            document.getElementById('incoming-call-modal').style.display = 'none';
+            addCallToLog(targetCallEntityId, 'Inbound', 'Answered');
+            launchActiveCallFrame(targetCallEntityId);
+        }
+
+        function actionDeclineCall() {
+            clearInterval(callTimeoutTracker);
+            stopRingtonePlayback();
+            document.getElementById('incoming-call-modal').style.display = 'none';
+            addCallToLog(targetCallEntityId, 'Inbound', 'Declined');
+        }
+
+        function launchActiveCallFrame(partyId) {
+            document.getElementById('active-call-party').innerText = `ID: ${partyId}`;
+            document.getElementById('active-call-modal').style.display = 'flex';
+            
+            activeCallStartTime = Date.now();
+            callDurationInterval = setInterval(() => {
+                const elapsedSec = Math.floor((Date.now() - activeCallStartTime) / 1000);
+                const mins = String(Math.floor(elapsedSec / 60)).padStart(2, '0');
+                const secs = String(elapsedSec % 60).padStart(2, '0');
+                document.getElementById('call-duration-clock').innerText = `${mins}:${secs}`;
+            }, 1000);
+        }
+
+        // Hang up logic
+        function endActiveCall() {
+            clearInterval(callDurationInterval);
+            document.getElementById('active-call-modal').style.display = 'none';
+            document.getElementById('call-duration-clock').innerText = "00:00";
+        }
+
+        // --- CONTACT MANAGEMENT ENGINE ---
+        function renderContacts() {
+            const container = document.getElementById('contacts-list-container');
+            container.innerHTML = appState.contacts.length === 0 ? '<p style="color:var(--text-muted); text-align:center;">No entries found.</p>' : '';
+            
+            appState.contacts.forEach((contact, idx) => {
+                const item = document.createElement('div');
+                item.className = 'list-item';
+                item.innerHTML = `
+                    <div class="item-details">
+                        <div class="name">${contact.name}</div>
+                        <div class="meta">ID Node: ${contact.id}</div>
+                    </div>
+                    <div class="item-actions">
+                        <button class="action-call" onclick="simulateOutgoingCall('${contact.id}')">📞 Call</button>
+                        <button class="action-edit" onclick="editContact(${idx})">✏️ Edit</button>
+                        <button class="action-delete" onclick="deleteContact(${idx})">🗑️ Delete</button>
+                    </div>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        function saveContact() {
+            const name = document.getElementById('contact-name').value.trim();
+            const id = document.getElementById('contact-id').value.trim();
+            const editIdx = document.getElementById('edit-index').value;
+
+            if(!name || !id) return alert("All text fields must contain values.");
+
+            if(editIdx === "") {
+                appState.contacts.push({ name, id });
+            } else {
+                appState.contacts[parseInt(editIdx)] = { name, id };
+            }
+            
+            saveStateToDisk();
+            resetContactForm();
+            renderContacts();
+        }
+
+        function editContact(idx) {
+            const contact = appState.contacts[idx];
+            document.getElementById('contact-name').value = contact.name;
+            document.getElementById('contact-id').value = contact.id;
+            document.getElementById('edit-index').value = idx;
+            document.getElementById('contact-form-title').innerText = "Modify Contact Settings";
+            document.getElementById('btn-save-contact').innerText = "Update Entry";
+            document.getElementById('btn-cancel-edit').style.display = 'block';
+        }
+
+        function deleteContact(idx) {
+            if(confirm("Confirm removal of target contact?")) {
+                appState.contacts.splice(idx, 1);
+                saveStateToDisk();
+                renderContacts();
+            }
+        }
+
+        function resetContactForm() {
+            document.getElementById('contact-name').value = '';
+            document.getElementById('contact-id').value = '';
+            document.getElementById('edit-index').value = '';
+            document.getElementById('contact-form-title').innerText = "Add New Contact";
+            document.getElementById('btn-save-contact').innerText = "Add Contact";
+            document.getElementById('btn-cancel-edit').style.display = 'none';
+        }
+
+        // --- CALL HISTORY ENGINE ---
+        function renderHistory() {
+            const container = document.getElementById('history-list-container');
+            container.innerHTML = appState.history.length === 0 ? '<p style="color:var(--text-muted); text-align:center;">No recent logs found.</p>' : '';
+            
+            appState.history.forEach(log => {
+                const item = document.createElement('div');
+                item.className = 'list-item';
+                
+                let badgeClass = log.status.toLowerCase();
+                let arrowSign = log.direction === 'Outgoing' ? '↗️' : '↙️';
+
+                item.innerHTML = `
+                    <div class="item-details">
+                        <div class="name">${arrowSign} Contact ID: ${log.id}</div>
+                        <div class="meta">${log.time}</div>
+                    </div>
+                    <div>
+                        <span class="badge ${badgeClass}">${log.status}</span>
+                    </div>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        function clearAllLogs() {
+            if(confirm("Purge call logs history?")) {
+                appState.history = [];
+                saveStateToDisk();
+                renderHistory();
+            }
+        }
+
+        // --- DESTRUCTION LOGIC ---
+        function signOutSimulation() {
+            alert("CallAndroid connection signed out. Reloading system app context.");
+            window.location.reload();
+        }
+
+        function deleteAccountSimulation() {
+            if(confirm("WARNING: Proceeding completely clears all saved contacts, logs, and theme variations. Continue?")) {
+                localStorage.clear();
+                alert("Persistent cache cleared.");
+                window.location.reload();
+            }
+        }
+
+        // --- INIT ENVIRONMENT ---
+        window.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('my-id-display').innerText = appState.myPermanentId;
+            document.getElementById('setting-ringtone').value = appState.ringtone;
+            
+            // Initialization configurations
+            applyConfiguredTheme();
+            
+            // Test Simulator: Triggers an automatic demo call matching your 4-digit setup after 4 seconds
+            setTimeout(() => {
+                triggerInboundCallSimulation("4012");
+            }, 4000);
+        });
+    </script>
+</body>
+</html>
