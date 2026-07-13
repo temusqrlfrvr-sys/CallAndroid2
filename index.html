@@ -138,6 +138,7 @@
         button.btn-danger { background: var(--danger-color); }
 
         .list-item { display: flex; justify-content: space-between; align-items: center; padding: 14px 6px; border-bottom: 1px solid var(--border-color); }
+        .item-details { display: flex; flex-direction: column; }
         .item-details .name { font-weight: 600; }
         .item-details .meta { font-size: 0.8rem; color: var(--text-muted); margin-top: 4px; }
         .item-actions button { background: none; border: none; margin-left: 14px; cursor: pointer; font-size: 1.1rem; }
@@ -224,7 +225,7 @@
     <main>
         <div id="tab-keypad" class="tab-content active">
             <h2>Dialer</h2>
-            <div class="my-id-box">Your Network ID: <span id="my-id-display">Connecting...</span></div>
+            <div class="my-id-box">Your Network ID: <span id="my-id-display">Generating...</span></div>
             <div class="display-screen" id="dial-screen"></div>
             
             <div class="keypad-grid">
@@ -274,12 +275,10 @@
 
         <div id="tab-settings" class="tab-content">
             <h2>Preferences</h2>
-            
             <div style="margin-bottom: 25px;">
                 <label style="font-weight: bold; display: block; margin-bottom: 8px;">Interface Theme:</label>
                 <button class="btn-standard" id="theme-toggle-btn" onclick="toggleAppTheme()">☀️ Switch to Light Mode</button>
             </div>
-
             <div style="margin-bottom: 25px;">
                 <label style="font-weight: bold; display: block; margin-bottom: 5px;">Ringtone Selection:</label>
                 <select id="setting-ringtone" onchange="previewRingtone()">
@@ -334,30 +333,18 @@
         let ringtoneInterval = null;
         let myStream = null;
         let peer = null;
-        
         let activeMediaCall = null;
         let activeDataConnection = null;
-
         let callDurationInterval = null;
         let activeCallStartTime = null;
         let incomingTimeoutTracker = null;
         let targetCallEntityId = "";
 
-        // Unchangeable static hardware fingerprint generation
+        // Hardware Device Fingerprint Engine
         function generateHardwareFingerprintID() {
             let savedId = localStorage.getItem('ca_my_id');
             if (savedId && savedId.length === 4) return savedId;
-            
             let fingerprintSrc = navigator.userAgent + navigator.language + screen.width + screen.height;
-            try {
-                let canvas = document.createElement('canvas');
-                let ctx = canvas.getContext('2d');
-                ctx.textBaseline = "top";
-                ctx.font = "14px 'Arial'";
-                ctx.fillText("CallAndroidIdFingerprint", 2, 2);
-                fingerprintSrc += canvas.toDataURL();
-            } catch(e) {}
-            
             let hash = 0;
             for (let i = 0; i < fingerprintSrc.length; i++) {
                 hash = (hash << 5) - hash + fingerprintSrc.charCodeAt(i);
@@ -383,41 +370,37 @@
             localStorage.setItem('ca_theme', appState.theme);
         }
 
-        // --- PHYSICAL KEYBOARD TRACKER MODULE ---
+        // --- PHYSICAL DESKTOP KEYBOARD BINDINGS ---
         window.addEventListener('keydown', (e) => {
-            if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'SELECT') {
-                return;
-            }
+            if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'SELECT') return;
             const allowedKeys = ['0','1','2','3','4','5','6','7','8','9','*','#'];
-            if (allowedKeys.includes(e.key)) {
-                pressKey(e.key);
-            } else if (e.key === 'Backspace') {
+            if (allowedKeys.includes(e.key)) pressKey(e.key);
+            else if (e.key === 'Backspace') {
                 const curText = dialScreen.innerText;
                 dialScreen.innerText = curText.substring(0, curText.length - 1);
-            } else if (e.key === 'Enter') {
-                makeCallFromDialer();
-            }
+            } else if (e.key === 'Enter') makeCallFromDialer();
         });
 
-        // --- POLYPHONIC AUDIO ENGINE ---
+        // --- WEB AUDIO API CODES FOR CUSTOM AUDIO GENERATION ---
         function playChimeTone(frequencies, duration, type="sine") {
-            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            let now = audioCtx.currentTime;
-            
-            frequencies.forEach(freq => {
-                let osc = audioCtx.createOscillator();
-                let gainNode = audioCtx.createGain();
+            try {
+                if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                let now = audioCtx.currentTime;
                 
-                osc.type = type;
-                osc.frequency.setValueAtTime(freq, now);
-                gainNode.gain.setValueAtTime(0.15, now);
-                gainNode.gain.exponentialRampToValueAtTime(0.001, now + duration);
-                
-                osc.connect(gainNode);
-                gainNode.connect(audioCtx.destination);
-                osc.start(now);
-                osc.stop(now + duration);
-            });
+                frequencies.forEach(freq => {
+                    let osc = audioCtx.createOscillator();
+                    let gainNode = audioCtx.createGain();
+                    osc.type = type;
+                    osc.frequency.setValueAtTime(freq, now);
+                    gainNode.gain.setValueAtTime(0.15, now);
+                    gainNode.gain.exponentialRampToValueAtTime(0.001, now + duration);
+                    osc.connect(gainNode);
+                    gainNode.connect(audioCtx.destination);
+                    osc.start(now);
+                    osc.stop(now + duration);
+                });
+            } catch(e) { console.error("Audio Context blocked by mobile policy:", e); }
         }
 
         function startRingtonePlayback(selectedTone = appState.ringtone) {
@@ -438,48 +421,39 @@
                     setTimeout(() => playChimeTone([554.37, 659.25, 880], 0.25, "sine"), 150);
                 }, 1200);
             } else if (selectedTone === 'chirp') {
-                ringtoneInterval = setInterval(() => {
-                    playChimeTone([1800, 2200], 0.04, "triangle");
-                }, 250);
+                ringtoneInterval = setInterval(() => { playChimeTone([1800, 2200], 0.04, "triangle"); }, 250);
             } else if (selectedTone === 'ambient') {
-                ringtoneInterval = setInterval(() => {
-                    playChimeTone([293.66, 440, 523.25], 0.6, "sine");
-                }, 1600);
+                ringtoneInterval = setInterval(() => { playChimeTone([293.66, 440, 523.25], 0.6, "sine"); }, 1600);
             }
         }
 
-        function stopRingtonePlayback() {
-            if (ringtoneInterval) { clearInterval(ringtoneInterval); ringtoneInterval = null; }
-        }
-
+        function stopRingtonePlayback() { if (ringtoneInterval) { clearInterval(ringtoneInterval); ringtoneInterval = null; } }
         function previewRingtone() {
             appState.ringtone = document.getElementById('setting-ringtone').value;
-            saveStateToDisk();
-            startRingtonePlayback();
-            setTimeout(stopRingtonePlayback, 1600);
+            saveStateToDisk(); startRingtonePlayback(); setTimeout(stopRingtonePlayback, 1600);
         }
 
-        // --- REAL P2P TIMING & STATE HANDSHAKING ENGINE ---
+        // --- HIGH AVAILABILITY GLOBAL INTER-NETWORK CONNECTION MAPPING ---
         function initRealTelephonyNetwork() {
-            // Display static ID instantly on screen
             document.getElementById('my-id-display').innerText = appState.myPermanentId;
+            
+            // Triple checked ICE Server array bypassing cell carrier NAT Firewalls
+            const firewallBypassConfig = {
+                'iceServers': [
+                    { 'urls': 'stun:stun.l.google.com:19302' },
+                    { 'urls': 'stun:stun1.l.google.com:19302' },
+                    { 'urls': 'stun:stun2.l.google.com:19302' },
+                    { 'urls': 'stun:stun3.l.google.com:19302' }
+                ]
+            };
 
-            peer = new Peer('ca-' + appState.myPermanentId);
-
-            peer.on('connection', (conn) => {
-                activeDataConnection = conn;
-                setupDataPacketListeners(conn);
-            });
-
+            peer = new Peer('ca-' + appState.myPermanentId, { config: firewallBypassConfig, debug: 1 });
+            peer.on('connection', (conn) => { activeDataConnection = conn; setupDataPacketListeners(conn); });
             peer.on('call', (incomingCall) => {
                 activeMediaCall = incomingCall;
                 targetCallEntityId = incomingCall.peer.replace('ca-', '');
                 let remoteRingtone = (incomingCall.options && incomingCall.options.metadata && incomingCall.options.metadata.ringtone) ? incomingCall.options.metadata.ringtone : appState.ringtone;
                 triggerInboundCall(targetCallEntityId, remoteRingtone);
-            });
-
-            peer.on('error', (err) => {
-                console.error("Network interface error logger:", err);
             });
         }
 
@@ -489,24 +463,19 @@
                     document.getElementById('outgoing-call-modal').style.display = 'none';
                     beginSynchronizedTimer(targetCallEntityId);
                 }
-                if (data.type === 'HANGUP_SIGNAL') {
-                    teardownCallUI();
-                }
+                if (data.type === 'HANGUP_SIGNAL') teardownCallUI();
             });
-            conn.on('close', () => {
-                teardownCallUI();
-            });
+            conn.on('close', () => { teardownCallUI(); });
         }
 
         function requestHardwarePermissions() {
             navigator.mediaDevices.getUserMedia({ audio: true })
                 .then(stream => {
-                    hasMicAccess = true;
-                    myStream = stream;
+                    hasMicAccess = true; myStream = stream;
                     document.getElementById('permission-warning').style.display = 'none';
                     document.getElementById('btn-accept-call').disabled = false;
                 })
-                .catch(err => {
+                .catch(() => {
                     hasMicAccess = false;
                     document.getElementById('permission-warning').style.display = 'block';
                     document.getElementById('btn-accept-call').disabled = true;
@@ -515,79 +484,63 @@
 
         function makeCallFromDialer() {
             const rawId = dialScreen.innerText.trim();
-            if(!rawId || rawId === appState.myPermanentId) return alert("Enter a valid external Network ID.");
+            if(!rawId || rawId === appState.myPermanentId) return alert("Enter a valid external 4-Digit Network ID.");
             simulateOutgoingCall(rawId);
         }
 
         function simulateOutgoingCall(targetId) {
-            if(!hasMicAccess) return alert("Microphone access required to transmit audio.");
-            targetCallEntityId = targetId;
-            clearScreen();
-
+            if(!hasMicAccess) return alert("Microphone access required to initiate connection pipeline.");
+            targetCallEntityId = targetId; clearScreen();
             document.getElementById('outgoing-call-party').innerText = `ID: ${targetId}`;
             document.getElementById('outgoing-status-text').innerText = "Calling...";
             document.getElementById('outgoing-call-modal').style.display = 'flex';
 
             activeDataConnection = peer.connect('ca-' + targetId);
             setupDataPacketListeners(activeDataConnection);
-
-            activeMediaCall = peer.call('ca-' + targetId, myStream, {
-                metadata: { ringtone: appState.ringtone }
-            });
-
+            activeMediaCall = peer.call('ca-' + targetId, myStream, { metadata: { ringtone: appState.ringtone } });
             activeMediaCall.on('close', () => { teardownCallUI(); });
         }
 
+        // --- BACKGROUND NOTIFICATION LAYER BINDINGS ---
         function triggerInboundCall(callerId, ringtoneToUse) {
             document.getElementById('incoming-caller-id').innerText = `ID: ${callerId}`;
             document.getElementById('incoming-call-modal').style.display = 'flex';
             
+            // Local fallback ring play matching configuration selections
             startRingtonePlayback(ringtoneToUse);
 
+            // True System UI Pop-Up Notification dispatch
             if (window.Notification && Notification.permission === "granted") {
-                try {
-                    new Notification(`Incoming Call`, {
-                        body: `Connection requesting audio layer access from node ID: ${callerId}`,
-                        tag: 'call-alert'
-                    });
-                } catch(e) {}
+                new Notification("🤖 CallAndroid Incoming Call", {
+                    body: `Connection active from Node terminal ID: ${callerId}`,
+                    tag: 'call-alert',
+                    requireInteraction: true
+                });
             }
 
             let timeoutCountdown = 15;
             document.getElementById('disconnect-timer-countdown').innerText = timeoutCountdown;
-            
             if (incomingTimeoutTracker) clearInterval(incomingTimeoutTracker);
             incomingTimeoutTracker = setInterval(() => {
                 timeoutCountdown--;
                 document.getElementById('disconnect-timer-countdown').innerText = timeoutCountdown;
-                if(timeoutCountdown <= 0) {
-                    actionDeclineCall();
-                }
+                if(timeoutCountdown <= 0) actionDeclineCall();
             }, 1000);
         }
 
         function actionAcceptCall() {
-            clearInterval(incomingTimeoutTracker);
-            stopRingtonePlayback();
+            clearInterval(incomingTimeoutTracker); stopRingtonePlayback();
             document.getElementById('incoming-call-modal').style.display = 'none';
-            
             if (activeMediaCall) {
                 activeMediaCall.answer(myStream);
-                if (activeDataConnection && activeDataConnection.open) {
-                    activeDataConnection.send({ type: 'ACCEPT_SIGNAL' });
-                }
+                if (activeDataConnection && activeDataConnection.open) activeDataConnection.send({ type: 'ACCEPT_SIGNAL' });
                 addCallToLog(targetCallEntityId, 'Inbound', 'Answered');
                 beginSynchronizedTimer(targetCallEntityId);
                 activeMediaCall.on('close', () => { teardownCallUI(); });
             }
         }
 
-        function actionDeclineCall() {
-            clearInterval(incomingTimeoutTracker);
-            stopRingtonePlayback();
-            document.getElementById('incoming-call-modal').style.display = 'none';
-            hangUpCurrentCall();
-        }
+        function actionDeclineCall() { clearInterval(incomingTimeoutTracker); stopRingtonePlayback(); document.getElementById('incoming-call-modal').style.display = 'none'; hangUpCurrentCall(); }
 
         function beginSynchronizedTimer(partyId) {
             document.getElementById('active-call-modal').style.display = 'flex';
@@ -596,11 +549,8 @@
             activeMediaCall.on('stream', (remoteAudioStream) => {
                 let existingNode = document.getElementById('remote-audio-sink');
                 if (existingNode) existingNode.remove();
-
                 const audioNode = document.createElement('audio');
-                audioNode.id = 'remote-audio-sink';
-                audioNode.srcObject = remoteAudioStream;
-                audioNode.autoplay = true;
+                audioNode.id = 'remote-audio-sink'; audioNode.srcObject = remoteAudioStream; audioNode.autoplay = true;
                 document.body.appendChild(audioNode);
             });
 
@@ -615,36 +565,27 @@
         }
 
         function hangUpCurrentCall() {
-            if (activeDataConnection && activeDataConnection.open) {
-                activeDataConnection.send({ type: 'HANGUP_SIGNAL' });
-            }
+            if (activeDataConnection && activeDataConnection.open) activeDataConnection.send({ type: 'HANGUP_SIGNAL' });
             teardownCallUI();
         }
 
         function teardownCallUI() {
-            stopRingtonePlayback();
-            clearInterval(incomingTimeoutTracker);
-            clearInterval(callDurationInterval);
-            
+            stopRingtonePlayback(); clearInterval(incomingTimeoutTracker); clearInterval(callDurationInterval);
             if(activeMediaCall) { activeMediaCall.close(); activeMediaCall = null; }
             if(activeDataConnection) { activeDataConnection.close(); activeDataConnection = null; }
-            
-            let sink = document.getElementById('remote-audio-sink');
-            if (sink) sink.remove();
-
+            let sink = document.getElementById('remote-audio-sink'); if (sink) sink.remove();
             document.getElementById('outgoing-call-modal').style.display = 'none';
             document.getElementById('incoming-call-modal').style.display = 'none';
             document.getElementById('active-call-modal').style.display = 'none';
             document.getElementById('call-duration-clock').innerText = "00:00";
         }
 
+        // --- INTERFACE CONTROL LOGIC LAYER ---
         function switchTab(tabName) {
             document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
             document.querySelectorAll('nav button').forEach(el => el.classList.remove('active'));
-            
             document.getElementById(`tab-${tabName}`).classList.add('active');
             document.getElementById(`nav-${tabName}`).classList.add('active');
-
             if (tabName === 'contacts') renderContacts();
             if (tabName === 'history') renderHistory();
         }
@@ -656,8 +597,7 @@
         function addCallToLog(id, direction, status) {
             const now = new Date();
             const timeString = now.toLocaleDateString() + ' ' + now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-            appState.history.unshift({ id, direction, status, time: timeString });
-            saveStateToDisk();
+            appState.history.unshift({ id, direction, status, time: timeString }); saveStateToDisk();
         }
 
         function renderContacts() {
@@ -668,15 +608,14 @@
                 item.className = 'list-item';
                 item.innerHTML = `
                     <div class="item-details">
-                        <div class="name">${contact.name}</div>
-                        <div class="meta">ID Node: ${contact.id}</div>
+                        <span class="name">${contact.name}</span>
+                        <span class="meta">ID Node: ${contact.id}</span>
                     </div>
                     <div class="item-actions">
                         <button onclick="simulateOutgoingCall('${contact.id}')">📞</button>
                         <button onclick="editContact(${idx})">✏️</button>
                         <button onclick="deleteContact(${idx})">🗑️</button>
-                    </div>
-                `;
+                    </div>`;
                 container.appendChild(item);
             });
         }
@@ -685,7 +624,7 @@
             const name = document.getElementById('contact-name').value.trim();
             const id = document.getElementById('contact-id').value.trim();
             const editIdx = document.getElementById('edit-index').value;
-            if(!name || !id) return alert("Fill fields.");
+            if(!name || !id) return alert("Input fields cannot be blank.");
             if(editIdx === "") appState.contacts.push({ name, id });
             else appState.contacts[parseInt(editIdx)] = { name, id };
             saveStateToDisk(); resetContactForm(); renderContacts();
@@ -700,11 +639,7 @@
             document.getElementById('btn-save-contact').innerText = "Update";
             document.getElementById('btn-cancel-edit').style.display = 'block';
         }
-
-        function deleteContact(idx) {
-            if(confirm("Delete Contact?")) { appState.contacts.splice(idx, 1); saveStateToDisk(); renderContacts(); }
-        }
-
+        function deleteContact(idx) { if(confirm("Delete Contact?")) { appState.contacts.splice(idx, 1); saveStateToDisk(); renderContacts(); } }
         function resetContactForm() {
             document.getElementById('contact-name').value = ''; document.getElementById('contact-id').value = '';
             document.getElementById('edit-index').value = ''; document.getElementById('btn-save-contact').innerText = "Add Contact";
@@ -728,64 +663,31 @@
         function deleteAccountSimulation() { localStorage.clear(); window.location.reload(); }
         
         function requestNotificationPermission() { 
-            if (!("Notification" in window)) {
-                alert("This browser variant does not support system push architecture.");
-                return;
-            }
-            try {
-                Notification.requestPermission().then(permission => {
-                    handlePermissionStatus(permission);
-                }).catch(() => {
-                    Notification.requestPermission(function(permission) {
-                        handlePermissionStatus(permission);
-                    });
-                });
-            } catch(error) {
-                Notification.requestPermission(function(permission) {
-                    handlePermissionStatus(permission);
-                });
-            }
-        }
-
-        function handlePermissionStatus(status) {
-            if (status === "granted") {
-                alert("System notification bindings initialized successfully!");
-                document.getElementById('btn-notifications-trigger').innerText = "✅ Notifications Active";
-            } else {
-                alert("Permissions denied or dismissed.");
-            }
+            if (!("Notification" in window)) return alert("This browser variant does not support system push architecture.");
+            Notification.requestPermission().then(status => {
+                if (status === "granted") {
+                    alert("System notifications allowed!");
+                    document.getElementById('btn-notifications-trigger').innerText = "✅ Notifications Active";
+                }
+            });
         }
         
         function applyConfiguredTheme() {
             document.body.setAttribute('data-theme', appState.theme);
             const btn = document.getElementById('theme-toggle-btn');
             if (appState.theme === 'dark') {
-                btn.innerText = "☀️ Switch to Light Mode";
-                btn.style.background = "#ffffff";
-                btn.style.color = "#0f172a";
+                btn.innerText = "☀️ Switch to Light Mode"; btn.style.background = "#ffffff"; btn.style.color = "#0f172a";
             } else {
-                btn.innerText = "🌙 Switch to Dark Mode";
-                btn.style.background = "#1e293b";
-                btn.style.color = "#ffffff";
+                btn.innerText = "🌙 Switch to Dark Mode"; btn.style.background = "#1e293b"; btn.style.color = "#ffffff";
             }
         }
-
-        function toggleAppTheme() {
-            appState.theme = appState.theme === 'dark' ? 'light' : 'dark';
-            saveStateToDisk();
-            applyConfiguredTheme();
-        }
+        function toggleAppTheme() { appState.theme = appState.theme === 'dark' ? 'light' : 'dark'; saveStateToDisk(); applyConfiguredTheme(); }
 
         window.addEventListener('DOMContentLoaded', () => {
             document.getElementById('setting-ringtone').value = appState.ringtone;
             applyConfiguredTheme();
-            
-            // Instantly start network and display ID!
             initRealTelephonyNetwork();
-            
-            // Check for microphone in background
             requestHardwarePermissions();
-            
             if(window.Notification && Notification.permission === "granted") {
                 document.getElementById('btn-notifications-trigger').innerText = "✅ Notifications Active";
             }
